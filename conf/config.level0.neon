@@ -45,6 +45,7 @@ rules:
 	- PHPStan\Rules\Classes\NonClassAttributeClassRule
 	- PHPStan\Rules\Classes\ReadOnlyClassRule
 	- PHPStan\Rules\Classes\TraitAttributeClassRule
+	- PHPStan\Rules\Constants\ClassAsClassConstantRule
 	- PHPStan\Rules\Constants\DynamicClassConstantFetchRule
 	- PHPStan\Rules\Constants\FinalConstantRule
 	- PHPStan\Rules\Constants\MagicConstantContextRule
@@ -91,16 +92,21 @@ rules:
 	- PHPStan\Rules\Operators\InvalidIncDecOperationRule
 	- PHPStan\Rules\Properties\AccessPropertiesInAssignRule
 	- PHPStan\Rules\Properties\AccessStaticPropertiesInAssignRule
+	- PHPStan\Rules\Properties\ExistingClassesInPropertyHookTypehintsRule
 	- PHPStan\Rules\Properties\InvalidCallablePropertyTypeRule
 	- PHPStan\Rules\Properties\MissingReadOnlyPropertyAssignRule
 	- PHPStan\Rules\Properties\MissingReadOnlyByPhpDocPropertyAssignRule
 	- PHPStan\Rules\Properties\PropertiesInInterfaceRule
+	- PHPStan\Rules\Properties\PropertyAssignRefRule
 	- PHPStan\Rules\Properties\PropertyAttributesRule
+	- PHPStan\Rules\Properties\PropertyHookAttributesRule
+	- PHPStan\Rules\Properties\PropertyInClassRule
 	- PHPStan\Rules\Properties\ReadOnlyPropertyRule
 	- PHPStan\Rules\Properties\ReadOnlyByPhpDocPropertyRule
 	- PHPStan\Rules\Regexp\RegularExpressionPatternRule
 	- PHPStan\Rules\Traits\ConflictingTraitConstantsRule
 	- PHPStan\Rules\Traits\ConstantsInTraitsRule
+	- PHPStan\Rules\Traits\TraitAttributesRule
 	- PHPStan\Rules\Types\InvalidTypesInUnionRule
 	- PHPStan\Rules\Variables\UnsetRule
 	- PHPStan\Rules\Whitespace\FileWhitespaceRule
@@ -174,9 +180,6 @@ services:
 		class: PHPStan\Rules\Properties\AccessPropertiesRule
 		tags:
 			- phpstan.rules.rule
-		arguments:
-			reportMagicProperties: %reportMagicProperties%
-			checkDynamicProperties: %checkDynamicProperties%
 
 	-
 		class: PHPStan\Rules\Properties\AccessStaticPropertiesRule
@@ -204,6 +207,14 @@ services:
 		arguments:
 			checkPhpDocMethodSignatures: %checkPhpDocMethodSignatures%
 			reportMaybes: %reportMaybesInPropertyPhpDocTypes%
+		tags:
+			- phpstan.rules.rule
+
+	-
+		class: PHPStan\Rules\Properties\SetPropertyHookParameterRule
+		arguments:
+			checkPhpDocMethodSignatures: %checkPhpDocMethodSignatures%
+			checkMissingTypehints: %checkMissingTypehints%
 		tags:
 			- phpstan.rules.rule
 

@@ -15,7 +15,6 @@ use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
 use PHPStan\Rules\RuleLevelHelper;
-use PHPStan\ShouldNotHappenException;
 use PHPStan\Type\Constant\ConstantStringType;
 use PHPStan\Type\ErrorType;
 use PHPStan\Type\StringType;
@@ -108,16 +107,6 @@ final class AccessStaticPropertiesRule implements Rule
 					];
 				}
 
-				if ($scope->getFunctionName() === null) {
-					throw new ShouldNotHappenException();
-				}
-
-				$currentMethodReflection = $scope->getClassReflection()->getNativeMethod($scope->getFunctionName());
-				if (!$currentMethodReflection->isStatic()) {
-					// calling parent::method() from instance method
-					return [];
-				}
-
 				$classType = $scope->resolveTypeByName($node->class);
 			} else {
 				if (!$this->reflectionProvider->hasClass($class)) {
@@ -195,7 +184,7 @@ final class AccessStaticPropertiesRule implements Rule
 
 				while ($parentClassReflection !== null) {
 					if ($parentClassReflection->hasProperty($name)) {
-						if ($scope->canAccessProperty($parentClassReflection->getProperty($name, $scope))) {
+						if ($scope->canReadProperty($parentClassReflection->getProperty($name, $scope))) {
 							return [];
 						}
 						return [
@@ -238,7 +227,7 @@ final class AccessStaticPropertiesRule implements Rule
 			]);
 		}
 
-		if (!$scope->canAccessProperty($property)) {
+		if (!$scope->canReadProperty($property)) {
 			return array_merge($messages, [
 				RuleErrorBuilder::message(sprintf(
 					'Access to %s property $%s of class %s.',

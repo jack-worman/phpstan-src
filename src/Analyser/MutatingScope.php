@@ -7,6 +7,7 @@ use Closure;
 use Generator;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
+use PhpParser\Node\ComplexType;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\BinaryOp;
@@ -21,6 +22,7 @@ use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\PropertyFetch;
 use PhpParser\Node\Expr\Variable;
+use PhpParser\Node\Identifier;
 use PhpParser\Node\InterpolatedStringPart;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
@@ -610,12 +612,7 @@ final class MutatingScope implements Scope
 			return $this->fileHasCompilerHaltStatementCalls();
 		}
 
-		if (!$name->isFullyQualified() && $this->getNamespace() !== null) {
-			if ($this->hasExpressionType(new ConstFetch(new FullyQualified([$this->getNamespace(), $name->toString()])))->yes()) {
-				return true;
-			}
-		}
-		if ($this->hasExpressionType(new ConstFetch(new FullyQualified($name->toString())))->yes()) {
+		if ($this->getGlobalConstantType($name) !== null) {
 			return true;
 		}
 
@@ -711,15 +708,16 @@ final class MutatingScope implements Scope
 	{
 		$key = $this->exprPrinter->printExpr($node);
 
+		$attributes = $node->getAttributes();
 		if (
 			$node instanceof Node\FunctionLike
-			&& $node->hasAttribute(ArrayMapArgVisitor::ATTRIBUTE_NAME)
-			&& $node->hasAttribute('startFilePos')
+			&& (($attributes[ArrayMapArgVisitor::ATTRIBUTE_NAME] ?? null) !== null)
+			&& (($attributes['startFilePos'] ?? null) !== null)
 		) {
-			$key .= '/*' . $node->getAttribute('startFilePos') . '*/';
+			$key .= '/*' . $attributes['startFilePos'] . '*/';
 		}
 
-		if ($node->getAttribute(self::KEEP_VOID_ATTRIBUTE_NAME) === true) {
+		if (($attributes[self::KEEP_VOID_ATTRIBUTE_NAME] ?? null) === true) {
 			$key .= '/*' . self::KEEP_VOID_ATTRIBUTE_NAME . '*/';
 		}
 
@@ -2965,6 +2963,7 @@ final class MutatingScope implements Scope
 			new PhpMethodFromParserNodeReflection(
 				$this->getClassReflection(),
 				$classMethod,
+				null,
 				$this->getFile(),
 				$templateTypeMap,
 				$this->getRealParameterTypes($classMethod),
@@ -2987,6 +2986,90 @@ final class MutatingScope implements Scope
 				array_map(fn (Type $type): Type => $this->transformStaticType(TemplateTypeHelper::toArgument($type)), $phpDocClosureThisTypeParameters),
 			),
 			!$classMethod->isStatic(),
+		);
+	}
+
+	/**
+	 * @param Type[] $phpDocParameterTypes
+	 */
+	public function enterPropertyHook(
+		Node\PropertyHook $hook,
+		string $propertyName,
+		Identifier|Name|ComplexType|null $nativePropertyTypeNode,
+		?Type $phpDocPropertyType,
+		array $phpDocParameterTypes,
+		?Type $throwType,
+		?string $deprecatedDescription,
+		bool $isDeprecated,
+		?string $phpDocComment,
+	): self
+	{
+		if (!$this->isInClass()) {
+			throw new ShouldNotHappenException();
+		}
+
+		$phpDocParameterTypes = array_map(fn (Type $type): Type => $this->transformStaticType(TemplateTypeHelper::toArgument($type)), $phpDocParameterTypes);
+
+		$hookName = $hook->name->toLowerString();
+		if ($hookName === 'set') {
+			if ($hook->params === []) {
+				$hook = clone $hook;
+				$hook->params = [
+					new Node\Param(new Variable('value'), null, $nativePropertyTypeNode),
+				];
+			}
+
+			$firstParam = $hook->params[0] ?? null;
+			if (
+				$firstParam !== null
+				&& $phpDocPropertyType !== null
+				&& $firstParam->var instanceof Variable
+				&& is_string($firstParam->var->name)
+			) {
+				$valueParamPhpDocType = $phpDocParameterTypes[$firstParam->var->name] ?? null;
+				if ($valueParamPhpDocType === null) {
+					$phpDocParameterTypes[$firstParam->var->name] = $this->transformStaticType(TemplateTypeHelper::toArgument($phpDocPropertyType));
+				}
+			}
+
+			$realReturnType = new VoidType();
+			$phpDocReturnType = null;
+		} elseif ($hookName === 'get') {
+			$realReturnType = $this->getFunctionType($nativePropertyTypeNode, false, false);
+			$phpDocReturnType = $phpDocPropertyType !== null ? $this->transformStaticType(TemplateTypeHelper::toArgument($phpDocPropertyType)) : null;
+		} else {
+			throw new ShouldNotHappenException();
+		}
+
+		$realParameterTypes = $this->getRealParameterTypes($hook);
+
+		return $this->enterFunctionLike(
+			new PhpMethodFromParserNodeReflection(
+				$this->getClassReflection(),
+				$hook,
+				$propertyName,
+				$this->getFile(),
+				TemplateTypeMap::createEmpty(),
+				$realParameterTypes,
+				$phpDocParameterTypes,
+				[],
+				$realReturnType,
+				$phpDocReturnType,
+				$throwType,
+				$deprecatedDescription,
+				$isDeprecated,
+				false,
+				false,
+				false,
+				true,
+				Assertions::createEmpty(),
+				null,
+				$phpDocComment,
+				[],
+				[],
+				[],
+			),
+			true,
 		);
 	}
 
@@ -3138,7 +3221,7 @@ final class MutatingScope implements Scope
 
 			$paramExprString = '$' . $parameter->getName();
 			if ($parameter->isVariadic()) {
-				if ($this->phpVersion->supportsNamedArguments() && $functionReflection->acceptsNamedArguments()->yes()) {
+				if (!$this->getPhpVersion()->supportsNamedArguments()->no() && $functionReflection->acceptsNamedArguments()->yes()) {
 					$parameterType = new ArrayType(new UnionType([new IntegerType(), new StringType()]), $parameterType);
 				} else {
 					$parameterType = TypeCombinator::intersect(new ArrayType(new IntegerType(), $parameterType), new AccessoryArrayListType());
@@ -3153,7 +3236,7 @@ final class MutatingScope implements Scope
 
 			$nativeParameterType = $parameter->getNativeType();
 			if ($parameter->isVariadic()) {
-				if ($this->phpVersion->supportsNamedArguments() && $functionReflection->acceptsNamedArguments()->yes()) {
+				if (!$this->getPhpVersion()->supportsNamedArguments()->no() && $functionReflection->acceptsNamedArguments()->yes()) {
 					$nativeParameterType = new ArrayType(new UnionType([new IntegerType(), new StringType()]), $nativeParameterType);
 				} else {
 					$nativeParameterType = TypeCombinator::intersect(new ArrayType(new IntegerType(), $nativeParameterType), new AccessoryArrayListType());
@@ -3628,7 +3711,7 @@ final class MutatingScope implements Scope
 			);
 		}
 		if ($isVariadic) {
-			if ($this->phpVersion->supportsNamedArguments()) {
+			if (!$this->getPhpVersion()->supportsNamedArguments()->no()) {
 				return new ArrayType(new UnionType([new IntegerType(), new StringType()]), $this->getFunctionType(
 					$type,
 					false,
@@ -5298,10 +5381,65 @@ final class MutatingScope implements Scope
 		return $depth;
 	}
 
-	/** @api */
+	/**
+	 * @api
+	 * @deprecated Use canReadProperty() or canWriteProperty()
+	 */
 	public function canAccessProperty(PropertyReflection $propertyReflection): bool
 	{
 		return $this->canAccessClassMember($propertyReflection);
+	}
+
+	/** @api */
+	public function canReadProperty(ExtendedPropertyReflection $propertyReflection): bool
+	{
+		return $this->canAccessClassMember($propertyReflection);
+	}
+
+	/** @api */
+	public function canWriteProperty(ExtendedPropertyReflection $propertyReflection): bool
+	{
+		if (!$propertyReflection->isPrivateSet() && !$propertyReflection->isProtectedSet()) {
+			return $this->canAccessClassMember($propertyReflection);
+		}
+
+		if (!$this->phpVersion->supportsAsymmetricVisibility()) {
+			return $this->canAccessClassMember($propertyReflection);
+		}
+
+		$classReflectionName = $propertyReflection->getDeclaringClass()->getName();
+		$canAccessClassMember = static function (ClassReflection $classReflection) use ($propertyReflection, $classReflectionName) {
+			if ($propertyReflection->isPrivateSet()) {
+				return $classReflection->getName() === $classReflectionName;
+			}
+
+			// protected set
+
+			if (
+				$classReflection->getName() === $classReflectionName
+				|| $classReflection->isSubclassOf($classReflectionName)
+			) {
+				return true;
+			}
+
+			return $propertyReflection->getDeclaringClass()->isSubclassOf($classReflection->getName());
+		};
+
+		foreach ($this->inClosureBindScopeClasses as $inClosureBindScopeClass) {
+			if (!$this->reflectionProvider->hasClass($inClosureBindScopeClass)) {
+				continue;
+			}
+
+			if ($canAccessClassMember($this->reflectionProvider->getClass($inClosureBindScopeClass))) {
+				return true;
+			}
+		}
+
+		if ($this->isInClass()) {
+			return $canAccessClassMember($this->getClassReflection());
+		}
+
+		return false;
 	}
 
 	/** @api */
@@ -5685,6 +5823,25 @@ final class MutatingScope implements Scope
 		return $constantTypes;
 	}
 
+	private function getGlobalConstantType(Name $name): ?Type
+	{
+		$fetches = [];
+		if (!$name->isFullyQualified() && $this->getNamespace() !== null) {
+			$fetches[] = new ConstFetch(new FullyQualified([$this->getNamespace(), $name->toString()]));
+		}
+
+		$fetches[] = new ConstFetch(new FullyQualified($name->toString()));
+		$fetches[] = new ConstFetch($name);
+
+		foreach ($fetches as $constFetch) {
+			if ($this->hasExpressionType($constFetch)->yes()) {
+				return $this->getType($constFetch);
+			}
+		}
+
+		return null;
+	}
+
 	/**
 	 * @return array<string, ExpressionTypeHolder>
 	 */
@@ -5727,15 +5884,15 @@ final class MutatingScope implements Scope
 
 	public function getPhpVersion(): PhpVersions
 	{
-		$versionExpr = new ConstFetch(new Name('PHP_VERSION_ID'));
-		if (!$this->hasExpressionType($versionExpr)->yes()) {
-			if (is_array($this->configPhpVersion)) {
-				return new PhpVersions(IntegerRangeType::fromInterval($this->configPhpVersion['min'], $this->configPhpVersion['max']));
-			}
-			return new PhpVersions(new ConstantIntegerType($this->phpVersion->getVersionId()));
+		$constType = $this->getGlobalConstantType(new Name('PHP_VERSION_ID'));
+		if ($constType !== null) {
+			return new PhpVersions($constType);
 		}
 
-		return new PhpVersions($this->getType($versionExpr));
+		if (is_array($this->configPhpVersion)) {
+			return new PhpVersions(IntegerRangeType::fromInterval($this->configPhpVersion['min'], $this->configPhpVersion['max']));
+		}
+		return new PhpVersions(new ConstantIntegerType($this->phpVersion->getVersionId()));
 	}
 
 }

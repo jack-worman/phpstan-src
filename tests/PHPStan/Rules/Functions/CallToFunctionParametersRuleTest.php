@@ -2,7 +2,6 @@
 
 namespace PHPStan\Rules\Functions;
 
-use PHPStan\Php\PhpVersion;
 use PHPStan\Rules\FunctionCallParametersCheck;
 use PHPStan\Rules\NullsafeCheck;
 use PHPStan\Rules\PhpDoc\UnresolvableTypeHelper;
@@ -28,7 +27,7 @@ class CallToFunctionParametersRuleTest extends RuleTestCase
 		$broker = $this->createReflectionProvider();
 		return new CallToFunctionParametersRule(
 			$broker,
-			new FunctionCallParametersCheck(new RuleLevelHelper($broker, true, false, true, $this->checkExplicitMixed, $this->checkImplicitMixed, false), new NullsafeCheck(), new PhpVersion(80000), new UnresolvableTypeHelper(), new PropertyReflectionFinder(), true, true, true, true),
+			new FunctionCallParametersCheck(new RuleLevelHelper($broker, true, false, true, $this->checkExplicitMixed, $this->checkImplicitMixed, false), new NullsafeCheck(), new UnresolvableTypeHelper(), new PropertyReflectionFinder(), true, true, true, true),
 		);
 	}
 
@@ -477,6 +476,10 @@ class CallToFunctionParametersRuleTest extends RuleTestCase
 
 	public function testNamedArguments(): void
 	{
+		if (PHP_VERSION_ID < 80000) {
+			$this->markTestSkipped('Test requires PHP 8.0');
+		}
+
 		$errors = [
 			[
 				'Missing parameter $j (int) in call to function FunctionNamedArguments\foo.',
@@ -491,12 +494,6 @@ class CallToFunctionParametersRuleTest extends RuleTestCase
 				14,
 			],
 		];
-		if (PHP_VERSION_ID < 80000) {
-			$errors[] = [
-				'Missing parameter $arr1 (array) in call to function array_merge.',
-				14,
-			];
-		}
 
 		require_once __DIR__ . '/data/named-arguments-define.php';
 		$this->analyse([__DIR__ . '/data/named-arguments.php'], $errors);
@@ -1321,40 +1318,48 @@ class CallToFunctionParametersRuleTest extends RuleTestCase
 				18,
 			],
 			[
-				'Parameter #3 $value of function curl_setopt expects bool, int given.',
+				'Parameter #3 $value of function curl_setopt expects string, int given.',
+				19,
+			],
+			[
+				'Parameter #3 $value of function curl_setopt expects string, int given.',
 				20,
 			],
 			[
-				'Parameter #3 $value of function curl_setopt expects bool, string given.',
-				21,
+				'Parameter #3 $value of function curl_setopt expects bool, int given.',
+				22,
 			],
 			[
-				'Parameter #3 $value of function curl_setopt expects int, string given.',
+				'Parameter #3 $value of function curl_setopt expects bool, string given.',
 				23,
 			],
 			[
-				'Parameter #3 $value of function curl_setopt expects array, string given.',
+				'Parameter #3 $value of function curl_setopt expects int, string given.',
 				25,
 			],
 			[
-				'Parameter #3 $value of function curl_setopt expects resource, string given.',
+				'Parameter #3 $value of function curl_setopt expects array, string given.',
 				27,
 			],
 			[
-				'Parameter #3 $value of function curl_setopt expects array|string, int given.',
+				'Parameter #3 $value of function curl_setopt expects resource, string given.',
 				29,
 			],
 			[
-				'Parameter #3 $value of function curl_setopt expects non-empty-string, \'\' given.',
+				'Parameter #3 $value of function curl_setopt expects array|string, int given.',
 				31,
 			],
 			[
+				'Parameter #3 $value of function curl_setopt expects non-empty-string, \'\' given.',
+				33,
+			],
+			[
 				'Parameter #3 $value of function curl_setopt expects non-empty-string|null, \'\' given.',
-				32,
+				34,
 			],
 			[
 				'Parameter #3 $value of function curl_setopt expects array<int, string>, array<string, string> given.',
-				73,
+				77,
 			],
 		]);
 	}

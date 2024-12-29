@@ -8,7 +8,9 @@ use PHPStan\Reflection\FunctionReflection;
 use PHPStan\Type\Accessory\AccessoryArrayListType;
 use PHPStan\Type\ArrayType;
 use PHPStan\Type\DynamicFunctionReturnTypeExtension;
+use PHPStan\Type\ErrorType;
 use PHPStan\Type\IntegerType;
+use PHPStan\Type\NeverType;
 use PHPStan\Type\Type;
 use PHPStan\Type\TypeCombinator;
 use function strtolower;
@@ -30,28 +32,28 @@ final class IteratorToArrayFunctionReturnTypeExtension implements DynamicFunctio
 		}
 
 		$traversableType = $scope->getType($arguments[0]->value);
-		$arrayKeyType = $traversableType->getIterableKeyType();
-		$isList = false;
 
 		if (isset($arguments[1])) {
 			$preserveKeysType = $scope->getType($arguments[1]->value);
 
 			if ($preserveKeysType->isFalse()->yes()) {
-				$arrayKeyType = new IntegerType();
-				$isList = true;
+				return TypeCombinator::intersect(new ArrayType(
+					new IntegerType(),
+					$traversableType->getIterableValueType(),
+				), new AccessoryArrayListType());
 			}
 		}
 
-		$arrayType = new ArrayType(
+		$arrayKeyType = $traversableType->getIterableKeyType()->toArrayKey();
+
+		if ($arrayKeyType instanceof ErrorType) {
+			return new NeverType(true);
+		}
+
+		return new ArrayType(
 			$arrayKeyType,
 			$traversableType->getIterableValueType(),
 		);
-
-		if ($isList) {
-			$arrayType = TypeCombinator::intersect($arrayType, new AccessoryArrayListType());
-		}
-
-		return $arrayType;
 	}
 
 }

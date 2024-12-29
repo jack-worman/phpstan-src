@@ -43,6 +43,7 @@ lint:
 		--exclude tests/PHPStan/Rules/Functions/data/arrow-function-nullsafe-by-ref.php \
 		--exclude tests/PHPStan/Levels/data/namedArguments.php \
 		--exclude tests/PHPStan/Rules/Keywords/data/continue-break.php \
+		--exclude tests/PHPStan/Rules/Keywords/data/continue-break-property-hook.php \
 		--exclude tests/PHPStan/Rules/Properties/data/invalid-callable-property-type.php \
 		--exclude tests/PHPStan/Rules/Properties/data/properties-in-interface.php \
 		--exclude tests/PHPStan/Rules/Properties/data/read-only-property.php \
@@ -54,6 +55,7 @@ lint:
 		--exclude tests/PHPStan/Rules/Classes/data/first-class-instantiation-callable.php \
 		--exclude tests/PHPStan/Rules/Classes/data/instantiation-callable.php \
 		--exclude tests/PHPStan/Rules/Classes/data/bug-9402.php \
+		--exclude tests/PHPStan/Rules/Constants/data/class-as-class-constant.php \
 		--exclude tests/PHPStan/Rules/Constants/data/value-assigned-to-class-constant-native-type.php \
 		--exclude tests/PHPStan/Rules/Constants/data/overriding-constant-native-types.php \
 		--exclude tests/PHPStan/Rules/Methods/data/bug-10043.php \
@@ -76,6 +78,24 @@ lint:
 		--exclude tests/PHPStan/Rules/Classes/data/extends-readonly-class.php \
 		--exclude tests/PHPStan/Rules/Classes/data/instantiation-promoted-properties.php \
 		--exclude tests/PHPStan/Rules/Classes/data/bug-11592.php \
+		--exclude tests/PHPStan/Rules/Properties/data/property-hooks-bodies-in-interface.php \
+		--exclude tests/PHPStan/Rules/Properties/data/property-hooks-in-interface.php \
+		--exclude tests/PHPStan/Rules/Properties/data/property-hooks-visibility-in-interface.php \
+		--exclude tests/PHPStan/Rules/Properties/data/abstract-hooked-properties-in-class.php \
+		--exclude tests/PHPStan/Rules/Properties/data/abstract-hooked-properties-with-bodies.php \
+		--exclude tests/PHPStan/Rules/Properties/data/abstract-non-hooked-properties-in-abstract-class.php \
+		--exclude tests/PHPStan/Rules/Properties/data/non-abstract-hooked-properties-in-abstract-class.php \
+		--exclude tests/PHPStan/Rules/Properties/data/non-abstract-hooked-properties-in-class.php \
+		--exclude tests/PHPStan/Rules/Properties/data/hooked-properties-in-class.php \
+		--exclude tests/PHPStan/Rules/Properties/data/hooked-properties-without-bodies-in-class.php \
+		--exclude tests/PHPStan/Rules/Classes/data/bug-12281.php \
+		--exclude tests/PHPStan/Rules/Traits/data/bug-12281.php \
+		--exclude tests/PHPStan/Rules/Classes/data/invalid-hooked-properties.php \
+		--exclude tests/PHPStan/Parser/data/cleaning-property-hooks-before.php \
+		--exclude tests/PHPStan/Parser/data/cleaning-property-hooks-after.php \
+		--exclude tests/PHPStan/Rules/Properties/data/existing-classes-property-hooks.php \
+		--exclude tests/PHPStan/Rules/Properties/data/set-property-hook-parameter.php \
+		--exclude tests/PHPStan/Rules/Properties/data/overriding-final-property.php \
 		src tests
 
 cs:

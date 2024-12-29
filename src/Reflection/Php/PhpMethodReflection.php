@@ -4,6 +4,7 @@ namespace PHPStan\Reflection\Php;
 
 use PHPStan\BetterReflection\Reflection\Adapter\ReflectionMethod;
 use PHPStan\BetterReflection\Reflection\Adapter\ReflectionParameter;
+use PHPStan\Internal\DeprecatedAttributeHelper;
 use PHPStan\Parser\Parser;
 use PHPStan\Parser\VariadicMethodsVisitor;
 use PHPStan\Reflection\Assertions;
@@ -352,6 +353,11 @@ final class PhpMethodReflection implements ExtendedMethodReflection
 			return $this->deprecatedDescription;
 		}
 
+		if ($this->reflection->isDeprecated()) {
+			$attributes = $this->reflection->getBetterReflection()->getAttributes();
+			return DeprecatedAttributeHelper::getDeprecatedDescription($attributes);
+		}
+
 		return null;
 	}
 
@@ -442,6 +448,65 @@ final class PhpMethodReflection implements ExtendedMethodReflection
 		}
 
 		return TrinaryLogic::createFromBoolean($this->isPure);
+	}
+
+	public function changePropertyGetHookPhpDocType(Type $phpDocType): self
+	{
+		return new self(
+			$this->initializerExprTypeResolver,
+			$this->declaringClass,
+			$this->declaringTrait,
+			$this->reflection,
+			$this->reflectionProvider,
+			$this->parser,
+			$this->templateTypeMap,
+			$this->phpDocParameterTypes,
+			$phpDocType,
+			$this->phpDocThrowType,
+			$this->deprecatedDescription,
+			$this->isDeprecated,
+			$this->isInternal,
+			$this->isFinal,
+			$this->isPure,
+			$this->asserts,
+			$this->acceptsNamedArguments,
+			$this->selfOutType,
+			$this->phpDocComment,
+			$this->phpDocParameterOutTypes,
+			$this->immediatelyInvokedCallableParameters,
+			$this->phpDocClosureThisTypeParameters,
+		);
+	}
+
+	public function changePropertySetHookPhpDocType(string $parameterName, Type $phpDocType): self
+	{
+		$phpDocParameterTypes = $this->phpDocParameterTypes;
+		$phpDocParameterTypes[$parameterName] = $phpDocType;
+
+		return new self(
+			$this->initializerExprTypeResolver,
+			$this->declaringClass,
+			$this->declaringTrait,
+			$this->reflection,
+			$this->reflectionProvider,
+			$this->parser,
+			$this->templateTypeMap,
+			$phpDocParameterTypes,
+			$this->phpDocReturnType,
+			$this->phpDocThrowType,
+			$this->deprecatedDescription,
+			$this->isDeprecated,
+			$this->isInternal,
+			$this->isFinal,
+			$this->isPure,
+			$this->asserts,
+			$this->acceptsNamedArguments,
+			$this->selfOutType,
+			$this->phpDocComment,
+			$this->phpDocParameterOutTypes,
+			$this->immediatelyInvokedCallableParameters,
+			$this->phpDocClosureThisTypeParameters,
+		);
 	}
 
 }

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "d1310e0c489abe492a66dced167d3f1e",
+    "content-hash": "f3a19a9abe4cf8cfbe9a6a76cf161369",
     "packages": [
         {
             "name": "clue/ndjson-react",
@@ -1442,19 +1442,19 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/JetBrains/phpstorm-stubs.git",
-                "reference": "7809499af1a5f3bdd20f1cab71717a2a9e1f8cf7"
+                "reference": "db675e059f57071e8209c99075128b92d8a727e7"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/JetBrains/phpstorm-stubs/zipball/7809499af1a5f3bdd20f1cab71717a2a9e1f8cf7",
-                "reference": "7809499af1a5f3bdd20f1cab71717a2a9e1f8cf7",
+                "url": "https://api.github.com/repos/JetBrains/phpstorm-stubs/zipball/db675e059f57071e8209c99075128b92d8a727e7",
+                "reference": "db675e059f57071e8209c99075128b92d8a727e7",
                 "shasum": ""
             },
             "require-dev": {
-                "friendsofphp/php-cs-fixer": "v3.64.0",
-                "nikic/php-parser": "v5.3.1",
-                "phpdocumentor/reflection-docblock": "5.6.0",
-                "phpunit/phpunit": "11.4.3"
+                "friendsofphp/php-cs-fixer": "^v3.64.0",
+                "nikic/php-parser": "^v5.3.1",
+                "phpdocumentor/reflection-docblock": "^5.6.0",
+                "phpunit/phpunit": "^11.4.3"
             },
             "default-branch": true,
             "type": "library",
@@ -1482,7 +1482,7 @@
             "support": {
                 "source": "https://github.com/JetBrains/phpstorm-stubs/tree/master"
             },
-            "time": "2024-11-27T14:37:09+00:00"
+            "time": "2024-12-23T11:36:45+00:00"
         },
         {
             "name": "nette/bootstrap",
@@ -2187,21 +2187,21 @@
         },
         {
             "name": "ondrejmirtes/better-reflection",
-            "version": "6.44.0.4",
+            "version": "6.49.0.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/ondrejmirtes/BetterReflection.git",
-                "reference": "3865f1f8779d4e3562886ee261ccfdbf2da15650"
+                "reference": "11abb6b4c9c8b29ee2730a3307ebae77b17fa94d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/ondrejmirtes/BetterReflection/zipball/3865f1f8779d4e3562886ee261ccfdbf2da15650",
-                "reference": "3865f1f8779d4e3562886ee261ccfdbf2da15650",
+                "url": "https://api.github.com/repos/ondrejmirtes/BetterReflection/zipball/11abb6b4c9c8b29ee2730a3307ebae77b17fa94d",
+                "reference": "11abb6b4c9c8b29ee2730a3307ebae77b17fa94d",
                 "shasum": ""
             },
             "require": {
                 "ext-json": "*",
-                "jetbrains/phpstorm-stubs": "dev-master#217ed9356d07ef89109d3cd7d8c5df10aab4b0d4",
+                "jetbrains/phpstorm-stubs": "dev-master#b61d4a5f40c3940be440d85355fef4e2416b8527",
                 "nikic/php-parser": "^5.3.1",
                 "php": "^7.4 || ^8.0"
             },
@@ -2212,7 +2212,7 @@
                 "doctrine/coding-standard": "^12.0.0",
                 "phpstan/phpstan": "^1.10.60",
                 "phpstan/phpstan-phpunit": "^1.3.16",
-                "phpunit/phpunit": "^11.4.3",
+                "phpunit/phpunit": "^11.5.1",
                 "rector/rector": "1.2.10"
             },
             "suggest": {
@@ -2252,22 +2252,22 @@
             ],
             "description": "Better Reflection - an improved code reflection API",
             "support": {
-                "source": "https://github.com/ondrejmirtes/BetterReflection/tree/6.44.0.4"
+                "source": "https://github.com/ondrejmirtes/BetterReflection/tree/6.49.0.0"
             },
-            "time": "2024-11-27T13:45:40+00:00"
+            "time": "2024-12-20T19:27:15+00:00"
         },
         {
             "name": "phpstan/php-8-stubs",
-            "version": "0.4.8",
+            "version": "0.4.9",
             "source": {
                 "type": "git",
                 "url": "https://github.com/phpstan/php-8-stubs.git",
-                "reference": "8a6278b2b9c9781cb969c4128da361b78eead604"
+                "reference": "1857c330fea6e795af1f7435ed02a18652e7dd8c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phpstan/php-8-stubs/zipball/8a6278b2b9c9781cb969c4128da361b78eead604",
-                "reference": "8a6278b2b9c9781cb969c4128da361b78eead604",
+                "url": "https://api.github.com/repos/phpstan/php-8-stubs/zipball/1857c330fea6e795af1f7435ed02a18652e7dd8c",
+                "reference": "1857c330fea6e795af1f7435ed02a18652e7dd8c",
                 "shasum": ""
             },
             "type": "library",
@@ -2284,9 +2284,9 @@
             "description": "PHP stubs extracted from php-src",
             "support": {
                 "issues": "https://github.com/phpstan/php-8-stubs/issues",
-                "source": "https://github.com/phpstan/php-8-stubs/tree/0.4.8"
+                "source": "https://github.com/phpstan/php-8-stubs/tree/0.4.9"
             },
-            "time": "2024-11-28T00:20:48+00:00"
+            "time": "2024-12-02T00:21:59+00:00"
         },
         {
             "name": "phpstan/phpdoc-parser",

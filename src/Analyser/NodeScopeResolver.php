@@ -10,6 +10,7 @@ use PhpParser\Modifiers;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\AttributeGroup;
+use PhpParser\Node\ComplexType;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\ArrayDimFetch;
@@ -35,6 +36,7 @@ use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\StaticPropertyFetch;
 use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
+use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\Break_;
 use PhpParser\Node\Stmt\Class_;
@@ -98,6 +100,7 @@ use PHPStan\Node\InClassNode;
 use PHPStan\Node\InClosureNode;
 use PHPStan\Node\InForeachNode;
 use PHPStan\Node\InFunctionNode;
+use PHPStan\Node\InPropertyHookNode;
 use PHPStan\Node\InstantiationCallableNode;
 use PHPStan\Node\InTraitNode;
 use PHPStan\Node\InvalidateExprNode;
@@ -111,6 +114,8 @@ use PHPStan\Node\MethodCallableNode;
 use PHPStan\Node\MethodReturnStatementsNode;
 use PHPStan\Node\NoopExpressionNode;
 use PHPStan\Node\PropertyAssignNode;
+use PHPStan\Node\PropertyHookReturnStatementsNode;
+use PHPStan\Node\PropertyHookStatementNode;
 use PHPStan\Node\ReturnStatement;
 use PHPStan\Node\StaticMethodCallableNode;
 use PHPStan\Node\UnreachableStatementNode;
@@ -120,6 +125,7 @@ use PHPStan\Parser\ArrowFunctionArgVisitor;
 use PHPStan\Parser\ClosureArgVisitor;
 use PHPStan\Parser\ImmediatelyInvokedClosureVisitor;
 use PHPStan\Parser\Parser;
+use PHPStan\Parser\PropertyHookNameVisitor;
 use PHPStan\Php\PhpVersion;
 use PHPStan\PhpDoc\PhpDocInheritanceResolver;
 use PHPStan\PhpDoc\ResolvedPhpDocBlock;
@@ -134,6 +140,7 @@ use PHPStan\Reflection\ExtendedMethodReflection;
 use PHPStan\Reflection\ExtendedParameterReflection;
 use PHPStan\Reflection\ExtendedParametersAcceptor;
 use PHPStan\Reflection\FunctionReflection;
+use PHPStan\Reflection\InitializerExprContext;
 use PHPStan\Reflection\InitializerExprTypeResolver;
 use PHPStan\Reflection\MethodReflection;
 use PHPStan\Reflection\Native\NativeMethodReflection;
@@ -144,6 +151,7 @@ use PHPStan\Reflection\ParametersAcceptorSelector;
 use PHPStan\Reflection\Php\PhpFunctionFromParserNodeReflection;
 use PHPStan\Reflection\Php\PhpMethodFromParserNodeReflection;
 use PHPStan\Reflection\Php\PhpMethodReflection;
+use PHPStan\Reflection\Php\PhpPropertyReflection;
 use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Reflection\SignatureMap\SignatureMapProvider;
 use PHPStan\Rules\Properties\ReadWritePropertiesExtensionProvider;
@@ -338,6 +346,7 @@ final class NodeScopeResolver
 		$stmtCount = count($stmts);
 		$shouldCheckLastStatement = $parentNode instanceof Node\Stmt\Function_
 			|| $parentNode instanceof Node\Stmt\ClassMethod
+			|| $parentNode instanceof PropertyHookStatementNode
 			|| $parentNode instanceof Expr\Closure;
 		foreach ($stmts as $i => $stmt) {
 			if ($alreadyTerminated && !($stmt instanceof Node\Stmt\Function_ || $stmt instanceof Node\Stmt\ClassLike)) {
@@ -355,7 +364,7 @@ final class NodeScopeResolver
 			$hasYield = $hasYield || $statementResult->hasYield();
 
 			if ($shouldCheckLastStatement && $isLast) {
-				/** @var Node\Stmt\Function_|Node\Stmt\ClassMethod|Expr\Closure $parentNode */
+				/** @var Node\Stmt\Function_|Node\Stmt\ClassMethod|PropertyHookStatementNode|Expr\Closure $parentNode */
 				$parentNode = $parentNode;
 
 				$endStatements = $statementResult->getEndStatements();
@@ -372,7 +381,7 @@ final class NodeScopeResolver
 								$endStatementResult->getThrowPoints(),
 								$endStatementResult->getImpurePoints(),
 							),
-							$parentNode->returnType !== null,
+							$parentNode->getReturnType() !== null,
 						), $endStatementResult->getScope());
 					}
 				} else {
@@ -386,7 +395,7 @@ final class NodeScopeResolver
 							$statementResult->getThrowPoints(),
 							$statementResult->getImpurePoints(),
 						),
-						$parentNode->returnType !== null,
+						$parentNode->getReturnType() !== null,
 					), $scope);
 				}
 			}
@@ -409,9 +418,9 @@ final class NodeScopeResolver
 
 		$statementResult = new StatementResult($scope, $hasYield, $alreadyTerminated, $exitPoints, $throwPoints, $impurePoints);
 		if ($stmtCount === 0 && $shouldCheckLastStatement) {
-			/** @var Node\Stmt\Function_|Node\Stmt\ClassMethod|Expr\Closure $parentNode */
+			/** @var Node\Stmt\Function_|Node\Stmt\ClassMethod|PropertyHookStatementNode|Expr\Closure $parentNode */
 			$parentNode = $parentNode;
-			$returnTypeNode = $parentNode->returnType;
+			$returnTypeNode = $parentNode->getReturnType();
 			if ($parentNode instanceof Expr\Closure) {
 				$parentNode = new Node\Stmt\Expression($parentNode, $parentNode->getAttributes());
 			}
@@ -525,6 +534,10 @@ final class NodeScopeResolver
 				$nodeCallback($stmt->returnType, $scope);
 			}
 
+			if (!$isDeprecated) {
+				[$isDeprecated, $deprecatedDescription] = $this->getDeprecatedAttribute($scope, $stmt);
+			}
+
 			$functionScope = $scope->enterFunction(
 				$stmt,
 				$templateTypeMap,
@@ -609,6 +622,10 @@ final class NodeScopeResolver
 				$nodeCallback($stmt->returnType, $scope);
 			}
 
+			if (!$isDeprecated) {
+				[$isDeprecated, $deprecatedDescription] = $this->getDeprecatedAttribute($scope, $stmt);
+			}
+
 			$methodScope = $scope->enterClassMethod(
 				$stmt,
 				$templateTypeMap,
@@ -633,10 +650,12 @@ final class NodeScopeResolver
 				throw new ShouldNotHappenException();
 			}
 
+			$classReflection = $scope->getClassReflection();
+
 			$isFromTrait = $stmt->getAttribute('originalTraitMethodName') === '__construct';
 			if ($isFromTrait || $stmt->name->toLowerString() === '__construct') {
 				foreach ($stmt->params as $param) {
-					if ($param->flags === 0) {
+					if ($param->flags === 0 && $param->hooks === []) {
 						continue;
 					}
 
@@ -650,7 +669,7 @@ final class NodeScopeResolver
 					$nodeCallback(new ClassPropertyNode(
 						$param->var->name,
 						$param->flags,
-						$param->type !== null ? ParserNodeTypeToPHPStanType::resolve($param->type, $scope->getClassReflection()) : null,
+						$param->type !== null ? ParserNodeTypeToPHPStanType::resolve($param->type, $classReflection) : null,
 						null,
 						$phpDoc,
 						$phpDocParameterTypes[$param->var->name] ?? null,
@@ -659,10 +678,19 @@ final class NodeScopeResolver
 						$param,
 						false,
 						$scope->isInTrait(),
-						$scope->getClassReflection()->isReadOnly(),
+						$classReflection->isReadOnly(),
 						false,
-						$scope->getClassReflection(),
+						$classReflection,
 					), $methodScope);
+					$this->processPropertyHooks(
+						$stmt,
+						$param->type,
+						$phpDocParameterTypes[$param->var->name] ?? null,
+						$param->var->name,
+						$param->hooks,
+						$scope,
+						$nodeCallback,
+					);
 					$methodScope = $methodScope->assignExpression(new PropertyInitializationExpr($param->var->name), new MixedType(), new MixedType());
 				}
 			}
@@ -672,7 +700,7 @@ final class NodeScopeResolver
 				if (!$methodReflection instanceof PhpMethodFromParserNodeReflection) {
 					throw new ShouldNotHappenException();
 				}
-				$nodeCallback(new InClassMethodNode($scope->getClassReflection(), $methodReflection, $stmt), $methodScope);
+				$nodeCallback(new InClassMethodNode($classReflection, $methodReflection, $stmt), $methodScope);
 			}
 
 			if ($stmt->stmts !== null) {
@@ -720,8 +748,6 @@ final class NodeScopeResolver
 
 					$gatheredReturnStatements[] = new ReturnStatement($scope, $node);
 				}, StatementContext::createTopLevel());
-
-				$classReflection = $scope->getClassReflection();
 
 				$methodReflection = $methodScope->getFunction();
 				if (!$methodReflection instanceof PhpMethodFromParserNodeReflection) {
@@ -844,6 +870,9 @@ final class NodeScopeResolver
 		} elseif ($stmt instanceof Node\Stmt\Trait_) {
 			return new StatementResult($scope, false, false, [], [], []);
 		} elseif ($stmt instanceof Node\Stmt\ClassLike) {
+			if (!$context->isTopLevel()) {
+				return new StatementResult($scope, false, false, [], [], []);
+			}
 			$hasYield = false;
 			$throwPoints = [];
 			$impurePoints = [];
@@ -881,29 +910,38 @@ final class NodeScopeResolver
 			$impurePoints = [];
 			$this->processAttributeGroups($stmt, $stmt->attrGroups, $scope, $nodeCallback);
 
+			$nativePropertyType = $stmt->type !== null ? ParserNodeTypeToPHPStanType::resolve($stmt->type, $scope->getClassReflection()) : null;
+
+			[,,,,,,,,,,,,$isReadOnly, $docComment, ,,,$varTags, $isAllowedPrivateMutation] = $this->getPhpDocs($scope, $stmt);
+			$phpDocType = null;
+			if (isset($varTags[0]) && count($varTags) === 1) {
+				$phpDocType = $varTags[0]->getType();
+			}
+
 			foreach ($stmt->props as $prop) {
 				$nodeCallback($prop, $scope);
 				if ($prop->default !== null) {
 					$this->processExprNode($stmt, $prop->default, $scope, $nodeCallback, ExpressionContext::createDeep());
 				}
-				[,,,,,,,,,,,,$isReadOnly, $docComment, ,,,$varTags, $isAllowedPrivateMutation] = $this->getPhpDocs($scope, $stmt);
+
 				if (!$scope->isInClass()) {
 					throw new ShouldNotHappenException();
 				}
 				$propertyName = $prop->name->toString();
-				$phpDocType = null;
-				if (isset($varTags[0]) && count($varTags) === 1) {
-					$phpDocType = $varTags[0]->getType();
-				} elseif (isset($varTags[$propertyName])) {
-					$phpDocType = $varTags[$propertyName]->getType();
+
+				if ($phpDocType === null) {
+					if (isset($varTags[$propertyName])) {
+						$phpDocType = $varTags[$propertyName]->getType();
+					}
 				}
+
 				$propStmt = clone $stmt;
 				$propStmt->setAttributes($prop->getAttributes());
 				$nodeCallback(
 					new ClassPropertyNode(
 						$propertyName,
 						$stmt->flags,
-						$stmt->type !== null ? ParserNodeTypeToPHPStanType::resolve($stmt->type, $scope->getClassReflection()) : null,
+						$nativePropertyType,
 						$prop->default,
 						$docComment,
 						$phpDocType,
@@ -917,6 +955,21 @@ final class NodeScopeResolver
 						$scope->getClassReflection(),
 					),
 					$scope,
+				);
+			}
+
+			if (count($stmt->hooks) > 0) {
+				if (!isset($propertyName)) {
+					throw new ShouldNotHappenException('Property name should be known when analysing hooks.');
+				}
+				$this->processPropertyHooks(
+					$stmt,
+					$stmt->type,
+					$phpDocType,
+					$propertyName,
+					$stmt->hooks,
+					$scope,
+					$nodeCallback,
 				);
 			}
 
@@ -1931,6 +1984,57 @@ final class NodeScopeResolver
 	}
 
 	/**
+	 * @return array{bool, string|null}
+	 */
+	private function getDeprecatedAttribute(Scope $scope, Node\Stmt\Function_|Node\Stmt\ClassMethod|Node\PropertyHook $stmt): array
+	{
+		$initializerExprContext = InitializerExprContext::fromStubParameter(
+			$scope->isInClass() ? $scope->getClassReflection()->getName() : null,
+			$scope->getFile(),
+			$stmt,
+		);
+		$isDeprecated = false;
+		$deprecatedDescription = null;
+		$deprecatedDescriptionType = null;
+		foreach ($stmt->attrGroups as $attrGroup) {
+			foreach ($attrGroup->attrs as $attr) {
+				if ($attr->name->toString() !== 'Deprecated') {
+					continue;
+				}
+				$isDeprecated = true;
+				$arguments = $attr->args;
+				foreach ($arguments as $i => $arg) {
+					$argName = $arg->name;
+					if ($argName === null) {
+						if ($i !== 0) {
+							continue;
+						}
+
+						$deprecatedDescriptionType = $this->initializerExprTypeResolver->getType($arg->value, $initializerExprContext);
+						break;
+					}
+
+					if ($argName->toString() !== 'message') {
+						continue;
+					}
+
+					$deprecatedDescriptionType = $this->initializerExprTypeResolver->getType($arg->value, $initializerExprContext);
+					break;
+				}
+			}
+		}
+
+		if ($deprecatedDescriptionType !== null) {
+			$constantStrings = $deprecatedDescriptionType->getConstantStrings();
+			if (count($constantStrings) === 1) {
+				$deprecatedDescription = $constantStrings[0]->getValue();
+			}
+		}
+
+		return [$isDeprecated, $deprecatedDescription];
+	}
+
+	/**
 	 * @return ThrowPoint[]|null
 	 */
 	private function getOverridingThrowPoints(Node\Stmt $statement, MutatingScope $scope): ?array
@@ -2870,6 +2974,7 @@ final class NodeScopeResolver
 			$throwPoints = array_merge($throwPoints, $result->getThrowPoints());
 			$impurePoints = array_merge($impurePoints, $result->getImpurePoints());
 		} elseif ($expr instanceof PropertyFetch) {
+			$scopeBeforeVar = $scope;
 			$result = $this->processExprNode($stmt, $expr->var, $scope, $nodeCallback, $context->enterDeep());
 			$hasYield = $result->hasYield();
 			$throwPoints = $result->getThrowPoints();
@@ -2881,6 +2986,20 @@ final class NodeScopeResolver
 				$throwPoints = array_merge($throwPoints, $result->getThrowPoints());
 				$impurePoints = array_merge($impurePoints, $result->getImpurePoints());
 				$scope = $result->getScope();
+				if ($this->phpVersion->supportsPropertyHooks()) {
+					$throwPoints[] = ThrowPoint::createImplicit($scope, $expr);
+				}
+			} else {
+				$propertyName = $expr->name->toString();
+				$propertyHolderType = $scopeBeforeVar->getType($expr->var);
+				$propertyReflection = $scopeBeforeVar->getPropertyReflection($propertyHolderType, $propertyName);
+				if ($propertyReflection !== null && $this->phpVersion->supportsPropertyHooks()) {
+					$propertyDeclaringClass = $propertyReflection->getDeclaringClass();
+					if ($propertyDeclaringClass->hasNativeProperty($propertyName)) {
+						$nativeProperty = $propertyDeclaringClass->getNativeProperty($propertyName);
+						$throwPoints = array_merge($throwPoints, $this->getPropertyReadThrowPointsFromGetHook($scopeBeforeVar, $expr, $nativeProperty));
+					}
+				}
 			}
 		} elseif ($expr instanceof Expr\NullsafePropertyFetch) {
 			$nonNullabilityResult = $this->ensureShallowNonNullability($scope, $scope, $expr->var);
@@ -4122,6 +4241,83 @@ final class NodeScopeResolver
 	}
 
 	/**
+	 * @return ThrowPoint[]
+	 */
+	private function getPropertyReadThrowPointsFromGetHook(
+		MutatingScope $scope,
+		PropertyFetch $propertyFetch,
+		PhpPropertyReflection $propertyReflection,
+	): array
+	{
+		return $this->getThrowPointsFromPropertyHook($scope, $propertyFetch, $propertyReflection, 'get');
+	}
+
+	/**
+	 * @return ThrowPoint[]
+	 */
+	private function getPropertyAssignThrowPointsFromSetHook(
+		MutatingScope $scope,
+		PropertyFetch $propertyFetch,
+		PhpPropertyReflection $propertyReflection,
+	): array
+	{
+		return $this->getThrowPointsFromPropertyHook($scope, $propertyFetch, $propertyReflection, 'set');
+	}
+
+	/**
+	 * @param 'get'|'set' $hookName
+	 * @return ThrowPoint[]
+	 */
+	private function getThrowPointsFromPropertyHook(
+		MutatingScope $scope,
+		PropertyFetch $propertyFetch,
+		PhpPropertyReflection $propertyReflection,
+		string $hookName,
+	): array
+	{
+		$scopeFunction = $scope->getFunction();
+		if (
+			$scopeFunction instanceof PhpMethodFromParserNodeReflection
+			&& $scopeFunction->isPropertyHook()
+			&& $propertyFetch->var instanceof Variable
+			&& $propertyFetch->var->name === 'this'
+			&& $propertyFetch->name instanceof Identifier
+			&& $propertyFetch->name->toString() === $scopeFunction->getHookedPropertyName()
+		) {
+			return [];
+		}
+		$declaringClass = $propertyReflection->getDeclaringClass();
+		if (!$propertyReflection->hasHook($hookName)) {
+			if (
+				$propertyReflection->isPrivate()
+				|| $propertyReflection->isFinal()->yes()
+				|| $declaringClass->isFinal()
+			) {
+				return [];
+			}
+
+			if ($this->implicitThrows) {
+				return [ThrowPoint::createImplicit($scope, $propertyFetch)];
+			}
+
+			return [];
+		}
+
+		$getHook = $propertyReflection->getHook($hookName);
+		$throwType = $getHook->getThrowType();
+
+		if ($throwType !== null) {
+			if (!$throwType->isVoid()->yes()) {
+				return [ThrowPoint::createExplicit($scope, $throwType, $propertyFetch, true)];
+			}
+		} elseif ($this->implicitThrows) {
+			return [ThrowPoint::createImplicit($scope, $propertyFetch)];
+		}
+
+		return [];
+	}
+
+	/**
 	 * @return string[]
 	 */
 	private function getAssignedVariables(Expr $expr): array
@@ -4548,6 +4744,118 @@ final class NodeScopeResolver
 				$nodeCallback($attr, $scope);
 			}
 			$nodeCallback($attrGroup, $scope);
+		}
+	}
+
+	/**
+	 * @param Node\PropertyHook[] $hooks
+	 * @param callable(Node $node, Scope $scope): void $nodeCallback
+	 */
+	private function processPropertyHooks(
+		Node\Stmt $stmt,
+		Identifier|Name|ComplexType|null $nativeTypeNode,
+		?Type $phpDocType,
+		string $propertyName,
+		array $hooks,
+		MutatingScope $scope,
+		callable $nodeCallback,
+	): void
+	{
+		if (!$scope->isInClass()) {
+			throw new ShouldNotHappenException();
+		}
+
+		$classReflection = $scope->getClassReflection();
+
+		foreach ($hooks as $hook) {
+			$nodeCallback($hook, $scope);
+			$this->processAttributeGroups($stmt, $hook->attrGroups, $scope, $nodeCallback);
+
+			[, $phpDocParameterTypes,,,, $phpDocThrowType,,,,,,,, $phpDocComment] = $this->getPhpDocs($scope, $hook);
+
+			foreach ($hook->params as $param) {
+				$this->processParamNode($stmt, $param, $scope, $nodeCallback);
+			}
+
+			[$isDeprecated, $deprecatedDescription] = $this->getDeprecatedAttribute($scope, $hook);
+
+			$hookScope = $scope->enterPropertyHook(
+				$hook,
+				$propertyName,
+				$nativeTypeNode,
+				$phpDocType,
+				$phpDocParameterTypes,
+				$phpDocThrowType,
+				$deprecatedDescription,
+				$isDeprecated,
+				$phpDocComment,
+			);
+			$hookReflection = $hookScope->getFunction();
+			if (!$hookReflection instanceof PhpMethodFromParserNodeReflection) {
+				throw new ShouldNotHappenException();
+			}
+
+			if (!$classReflection->hasNativeProperty($propertyName)) {
+				throw new ShouldNotHappenException();
+			}
+
+			$propertyReflection = $classReflection->getNativeProperty($propertyName);
+
+			$nodeCallback(new InPropertyHookNode(
+				$classReflection,
+				$hookReflection,
+				$propertyReflection,
+				$hook,
+			), $hookScope);
+
+			if ($hook->body instanceof Expr) {
+				$this->processExprNode($stmt, $hook->body, $hookScope, $nodeCallback, ExpressionContext::createTopLevel());
+				$nodeCallback(new PropertyAssignNode(new PropertyFetch(new Variable('this'), $propertyName, $hook->body->getAttributes()), $hook->body, false), $hookScope);
+			} elseif (is_array($hook->body)) {
+				$gatheredReturnStatements = [];
+				$executionEnds = [];
+				$methodImpurePoints = [];
+				$statementResult = $this->processStmtNodes(new PropertyHookStatementNode($hook), $hook->body, $hookScope, static function (Node $node, Scope $scope) use ($nodeCallback, $hookScope, &$gatheredReturnStatements, &$executionEnds, &$hookImpurePoints): void {
+					$nodeCallback($node, $scope);
+					if ($scope->getFunction() !== $hookScope->getFunction()) {
+						return;
+					}
+					if ($scope->isInAnonymousFunction()) {
+						return;
+					}
+					if ($node instanceof PropertyAssignNode) {
+						$hookImpurePoints[] = new ImpurePoint(
+							$scope,
+							$node,
+							'propertyAssign',
+							'property assignment',
+							true,
+						);
+						return;
+					}
+					if ($node instanceof ExecutionEndNode) {
+						$executionEnds[] = $node;
+						return;
+					}
+					if (!$node instanceof Return_) {
+						return;
+					}
+
+					$gatheredReturnStatements[] = new ReturnStatement($scope, $node);
+				}, StatementContext::createTopLevel());
+
+				$nodeCallback(new PropertyHookReturnStatementsNode(
+					$hook,
+					$gatheredReturnStatements,
+					$statementResult,
+					$executionEnds,
+					array_merge($statementResult->getImpurePoints(), $methodImpurePoints),
+					$classReflection,
+					$hookReflection,
+					$propertyReflection,
+				), $hookScope);
+			}
+
 		}
 	}
 
@@ -5206,6 +5514,10 @@ final class NodeScopeResolver
 			$impurePoints = array_merge($impurePoints, $result->getImpurePoints());
 			$scope = $result->getScope();
 
+			if ($var->name instanceof Expr && $this->phpVersion->supportsPropertyHooks()) {
+				$throwPoints[] = ThrowPoint::createImplicit($scope, $var);
+			}
+
 			$propertyHolderType = $scope->getType($var->var);
 			if ($propertyName !== null && $propertyHolderType->hasProperty($propertyName)->yes()) {
 				$propertyReflection = $propertyHolderType->getProperty($propertyName, $scope);
@@ -5221,6 +5533,9 @@ final class NodeScopeResolver
 						!$nativeProperty->getNativeType()->accepts($assignedExprType, true)->yes()
 					) {
 						$throwPoints[] = ThrowPoint::createExplicit($scope, new ObjectType(TypeError::class), $assignedExpr, false);
+					}
+					if ($this->phpVersion->supportsPropertyHooks()) {
+						$throwPoints = array_merge($throwPoints, $this->getPropertyAssignThrowPointsFromSetHook($scope, $var, $nativeProperty));
 					}
 					if ($enterExpressionAssign) {
 						$scope = $scope->assignInitializedProperty($propertyHolderType, $propertyName);
@@ -6090,6 +6405,11 @@ final class NodeScopeResolver
 			}
 		} elseif ($node instanceof Node\Stmt\Function_) {
 			$functionName = trim($scope->getNamespace() . '\\' . $node->name->name, '\\');
+		} elseif ($node instanceof Node\PropertyHook) {
+			$propertyName = $node->getAttribute(PropertyHookNameVisitor::ATTRIBUTE_NAME);
+			if ($propertyName !== null) {
+				$functionName = sprintf('$%s::%s', $propertyName, $node->name->toString());
+			}
 		}
 
 		if ($docComment !== null && $resolvedPhpDoc === null) {

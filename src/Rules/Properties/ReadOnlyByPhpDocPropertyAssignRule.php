@@ -7,6 +7,7 @@ use PHPStan\Analyser\Scope;
 use PHPStan\Node\PropertyAssignNode;
 use PHPStan\Reflection\ConstructorsHelper;
 use PHPStan\Reflection\MethodReflection;
+use PHPStan\Reflection\Php\PhpMethodFromParserNodeReflection;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
 use PHPStan\ShouldNotHappenException;
@@ -40,6 +41,18 @@ final class ReadOnlyByPhpDocPropertyAssignRule implements Rule
 			return [];
 		}
 
+		$inFunction = $scope->getFunction();
+		if (
+			$inFunction instanceof PhpMethodFromParserNodeReflection
+			&& $inFunction->isPropertyHook()
+			&& $propertyFetch->var instanceof Node\Expr\Variable
+			&& $propertyFetch->var->name === 'this'
+			&& $propertyFetch->name instanceof Node\Identifier
+			&& $inFunction->getHookedPropertyName() === $propertyFetch->name->toString()
+		) {
+			return [];
+		}
+
 		$errors = [];
 		$reflections = $this->propertyReflectionFinder->findPropertyReflectionsFromNode($propertyFetch, $scope);
 		foreach ($reflections as $propertyReflection) {
@@ -47,7 +60,7 @@ final class ReadOnlyByPhpDocPropertyAssignRule implements Rule
 			if ($nativeReflection === null) {
 				continue;
 			}
-			if (!$scope->canAccessProperty($propertyReflection)) {
+			if (!$scope->canWriteProperty($propertyReflection)) {
 				continue;
 			}
 			if (!$nativeReflection->isReadOnlyByPhpDoc() || $nativeReflection->isReadOnly()) {

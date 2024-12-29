@@ -7,11 +7,14 @@ use PHPStan\BetterReflection\Reflection\Adapter\ReflectionNamedType;
 use PHPStan\BetterReflection\Reflection\Adapter\ReflectionProperty;
 use PHPStan\BetterReflection\Reflection\Adapter\ReflectionUnionType;
 use PHPStan\Reflection\ClassReflection;
+use PHPStan\Reflection\ExtendedMethodReflection;
 use PHPStan\Reflection\ExtendedPropertyReflection;
+use PHPStan\Reflection\MissingMethodFromReflectionException;
 use PHPStan\TrinaryLogic;
 use PHPStan\Type\MixedType;
 use PHPStan\Type\Type;
 use PHPStan\Type\TypehintHelper;
+use function sprintf;
 
 /**
  * @api
@@ -29,6 +32,8 @@ final class PhpPropertyReflection implements ExtendedPropertyReflection
 		private ReflectionUnionType|ReflectionNamedType|ReflectionIntersectionType|null $nativeType,
 		private ?Type $phpDocType,
 		private ReflectionProperty $reflection,
+		private ?ExtendedMethodReflection $getHook,
+		private ?ExtendedMethodReflection $setHook,
 		private ?string $deprecatedDescription,
 		private bool $isDeprecated,
 		private bool $isInternal,
@@ -98,11 +103,35 @@ final class PhpPropertyReflection implements ExtendedPropertyReflection
 
 	public function getWritableType(): Type
 	{
+		if ($this->hasHook('set')) {
+			$setHookVariant = $this->getHook('set')->getOnlyVariant();
+			$parameters = $setHookVariant->getParameters();
+			if (isset($parameters[0])) {
+				return $parameters[0]->getType();
+			}
+		}
+
 		return $this->getReadableType();
 	}
 
 	public function canChangeTypeAfterAssignment(): bool
 	{
+		if ($this->isStatic()) {
+			return true;
+		}
+
+		if ($this->isVirtual()->yes()) {
+			return false;
+		}
+
+		if ($this->hasHook('get')) {
+			return false;
+		}
+
+		if ($this->hasHook('set')) {
+			return false;
+		}
+
 		return true;
 	}
 
@@ -145,12 +174,28 @@ final class PhpPropertyReflection implements ExtendedPropertyReflection
 
 	public function isReadable(): bool
 	{
-		return true;
+		if ($this->isStatic()) {
+			return true;
+		}
+
+		if (!$this->isVirtual()->yes()) {
+			return true;
+		}
+
+		return $this->hasHook('get');
 	}
 
 	public function isWritable(): bool
 	{
-		return true;
+		if ($this->isStatic()) {
+			return true;
+		}
+
+		if (!$this->isVirtual()->yes()) {
+			return true;
+		}
+
+		return $this->hasHook('set');
 	}
 
 	public function getDeprecatedDescription(): ?string
@@ -180,6 +225,84 @@ final class PhpPropertyReflection implements ExtendedPropertyReflection
 	public function getNativeReflection(): ReflectionProperty
 	{
 		return $this->reflection;
+	}
+
+	public function isAbstract(): TrinaryLogic
+	{
+		return TrinaryLogic::createFromBoolean($this->reflection->isAbstract());
+	}
+
+	public function isFinal(): TrinaryLogic
+	{
+		if ($this->reflection->isFinal()) {
+			return TrinaryLogic::createYes();
+		}
+		if ($this->reflection->isPrivate()) {
+			return TrinaryLogic::createNo();
+		}
+
+		return TrinaryLogic::createFromBoolean($this->isPrivateSet());
+	}
+
+	public function isVirtual(): TrinaryLogic
+	{
+		return TrinaryLogic::createFromBoolean($this->reflection->isVirtual());
+	}
+
+	public function hasHook(string $hookType): bool
+	{
+		if ($hookType === 'get') {
+			return $this->getHook !== null;
+		}
+
+		return $this->setHook !== null;
+	}
+
+	public function getHook(string $hookType): ExtendedMethodReflection
+	{
+		if ($hookType === 'get') {
+			if ($this->getHook === null) {
+				throw new MissingMethodFromReflectionException($this->declaringClass->getName(), sprintf('$%s::get', $this->reflection->getName()));
+			}
+
+			return $this->getHook;
+		}
+
+		if ($this->setHook === null) {
+			throw new MissingMethodFromReflectionException($this->declaringClass->getName(), sprintf('$%s::set', $this->reflection->getName()));
+		}
+
+		return $this->setHook;
+	}
+
+	public function isProtectedSet(): bool
+	{
+		if ($this->reflection->isProtectedSet()) {
+			return true;
+		}
+
+		if ($this->isReadOnly()) {
+			return !$this->isPrivate() && !$this->reflection->isPrivateSet();
+		}
+
+		return false;
+	}
+
+	public function isPrivateSet(): bool
+	{
+		if ($this->reflection->isPrivateSet()) {
+			return true;
+		}
+
+		if ($this->reflection->isProtectedSet()) {
+			return false;
+		}
+
+		if ($this->isReadOnly()) {
+			return $this->isPrivate();
+		}
+
+		return false;
 	}
 
 }

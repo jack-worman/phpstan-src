@@ -2,6 +2,7 @@
 
 namespace PHPStan\Reflection;
 
+use PHPStan\ShouldNotHappenException;
 use PHPStan\TrinaryLogic;
 use PHPStan\Type\Type;
 
@@ -75,6 +76,41 @@ final class WrappedExtendedPropertyReflection implements ExtendedPropertyReflect
 	public function isInternal(): TrinaryLogic
 	{
 		return $this->property->isInternal();
+	}
+
+	public function isAbstract(): TrinaryLogic
+	{
+		return TrinaryLogic::createNo();
+	}
+
+	public function isFinal(): TrinaryLogic
+	{
+		return TrinaryLogic::createNo();
+	}
+
+	public function isVirtual(): TrinaryLogic
+	{
+		return TrinaryLogic::createNo();
+	}
+
+	public function hasHook(string $hookType): bool
+	{
+		return false;
+	}
+
+	public function getHook(string $hookType): ExtendedMethodReflection
+	{
+		throw new ShouldNotHappenException();
+	}
+
+	public function isProtectedSet(): bool
+	{
+		return false;
+	}
+
+	public function isPrivateSet(): bool
+	{
+		return false;
 	}
 
 }

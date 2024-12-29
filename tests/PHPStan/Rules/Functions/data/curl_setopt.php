@@ -16,6 +16,8 @@ class HelloWorld
 		curl_setopt($curl, CURLOPT_URL, $i);
 		curl_setopt($curl, CURLOPT_HTTPHEADER, $i);
 		curl_setopt($curl, CURLOPT_ABSTRACT_UNIX_SOCKET, null);
+		curl_setopt($curl, CURLOPT_ENCODING, $i);
+		curl_setopt($curl, CURLOPT_ACCEPT_ENCODING, $i);
 		// expecting bool
 		curl_setopt($curl, CURLOPT_AUTOREFERER, $i);
 		curl_setopt($curl, CURLOPT_RETURNTRANSFER, $s);
@@ -62,6 +64,8 @@ class HelloWorld
 		curl_setopt($curl, CURLOPT_PRE_PROXY, '');
 		curl_setopt($curl, CURLOPT_PROXY, '');
 		curl_setopt($curl, CURLOPT_PRIVATE, '');
+		curl_setopt($curl, CURLOPT_ENCODING, '');
+		curl_setopt($curl, CURLOPT_ACCEPT_ENCODING, '');
 	}
 
 	public function bug9263() {

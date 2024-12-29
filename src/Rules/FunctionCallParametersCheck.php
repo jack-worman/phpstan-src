@@ -6,7 +6,6 @@ use PhpParser\Node;
 use PhpParser\Node\Expr;
 use PHPStan\Analyser\MutatingScope;
 use PHPStan\Analyser\Scope;
-use PHPStan\Php\PhpVersion;
 use PHPStan\Reflection\ExtendedParameterReflection;
 use PHPStan\Reflection\ParameterReflection;
 use PHPStan\Reflection\ParametersAcceptor;
@@ -42,7 +41,6 @@ final class FunctionCallParametersCheck
 	public function __construct(
 		private RuleLevelHelper $ruleLevelHelper,
 		private NullsafeCheck $nullsafeCheck,
-		private PhpVersion $phpVersion,
 		private UnresolvableTypeHelper $unresolvableTypeHelper,
 		private PropertyReflectionFinder $propertyReflectionFinder,
 		private bool $checkArgumentTypes,
@@ -102,8 +100,7 @@ final class FunctionCallParametersCheck
 		$hasNamedArguments = false;
 		$hasUnpackedArgument = false;
 		$errors = [];
-		foreach ($args as $i => $arg) {
-			$type = $scope->getType($arg->value);
+		foreach ($args as $arg) {
 			if ($hasNamedArguments && $arg->unpack) {
 				$errors[] = RuleErrorBuilder::message('Named argument cannot be followed by an unpacked (...) argument.')
 					->identifier('argument.unpackAfterNamed')
@@ -127,6 +124,7 @@ final class FunctionCallParametersCheck
 				$argumentName = $arg->name->toString();
 			}
 			if ($arg->unpack) {
+				$type = $scope->getType($arg->value);
 				$arrays = $type->getConstantArrays();
 				if (count($arrays) > 0) {
 					$maxKeys = null;
@@ -201,7 +199,7 @@ final class FunctionCallParametersCheck
 			];
 		}
 
-		if ($hasNamedArguments && !$this->phpVersion->supportsNamedArguments() && !(bool) $funcCall->getAttribute('isAttribute', false)) {
+		if ($hasNamedArguments && !$scope->getPhpVersion()->supportsNamedArguments()->yes() && !(bool) $funcCall->getAttribute('isAttribute', false)) {
 			$errors[] = RuleErrorBuilder::message('Named arguments are supported only on PHP 8.0 and later.')
 				->identifier('argument.namedNotSupported')
 				->line($funcCall->getStartLine())
@@ -211,7 +209,7 @@ final class FunctionCallParametersCheck
 
 		if (!$hasNamedArguments) {
 			$invokedParametersCount = count($arguments);
-			foreach ($arguments as $i => [$argumentValue, $argumentValueType, $unpack, $argumentName]) {
+			foreach ($arguments as [$argumentValue, $argumentValueType, $unpack, $argumentName]) {
 				if ($unpack) {
 					$invokedParametersCount = max($functionParametersMinCount, $functionParametersMaxCount);
 					break;

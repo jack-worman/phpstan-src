@@ -25,6 +25,7 @@ parameters:
 		checkParameterCastableToNumberFunctions: false
 		skipCheckGenericClasses: []
 		stricterFunctionMap: false
+		reportPreciseLineForUnusedFunctionParameter: false
 	fileExtensions:
 		- php
 	checkAdvancedIsset: false
@@ -51,6 +52,7 @@ parameters:
 	checkTooWideReturnTypesInProtectedAndPublicMethods: false
 	checkUninitializedProperties: false
 	checkDynamicProperties: false
+	strictRulesInstalled: false
 	deprecationRulesInstalled: false
 	inferPrivatePropertyTypeFromConstructor: false
 	reportMaybes: false
@@ -207,6 +209,8 @@ conditionalTags:
 		phpstan.rules.rule: %exceptions.check.missingCheckedExceptionInThrows%
 	PHPStan\Rules\Exceptions\MissingCheckedExceptionInMethodThrowsRule:
 		phpstan.rules.rule: %exceptions.check.missingCheckedExceptionInThrows%
+	PHPStan\Rules\Exceptions\MissingCheckedExceptionInPropertyHookThrowsRule:
+		phpstan.rules.rule: %exceptions.check.missingCheckedExceptionInThrows%
 
 services:
 	-
@@ -313,6 +317,11 @@ services:
 
 	-
 		class: PHPStan\Parser\VariadicFunctionsVisitor
+		tags:
+			- phpstan.parser.richParserNodeVisitor
+
+	-
+		class: PHPStan\Parser\PropertyHookNameVisitor
 		tags:
 			- phpstan.parser.richParserNodeVisitor
 
@@ -900,6 +909,9 @@ services:
 		class: PHPStan\Rules\Exceptions\MissingCheckedExceptionInMethodThrowsRule
 
 	-
+		class: PHPStan\Rules\Exceptions\MissingCheckedExceptionInPropertyHookThrowsRule
+
+	-
 		class: PHPStan\Rules\Exceptions\MissingCheckedExceptionInThrowsCheck
 		arguments:
 			exceptionTypeResolver: @exceptionTypeResolver
@@ -1010,6 +1022,9 @@ services:
 		class: PHPStan\Rules\PhpDoc\GenericCallableRuleHelper
 
 	-
+		class: PHPStan\Rules\PhpDoc\IncompatiblePhpDocTypeCheck
+
+	-
 		class: PHPStan\Rules\PhpDoc\VarTagTypeRuleHelper
 		arguments:
 			checkTypeAgainstPhpDocType: %reportWrongPhpDocTypeInVarTag%
@@ -1017,6 +1032,12 @@ services:
 
 	-
 		class: PHPStan\Rules\Playground\NeverRuleHelper
+
+	-
+		class: PHPStan\Rules\Properties\AccessPropertiesCheck
+		arguments:
+			reportMagicProperties: %reportMagicProperties%
+			checkDynamicProperties: %checkDynamicProperties%
 
 	-
 		class: PHPStan\Rules\Properties\LazyReadWritePropertiesExtensionProvider
@@ -1042,6 +1063,8 @@ services:
 
 	-
 		class: PHPStan\Rules\UnusedFunctionParametersCheck
+		arguments:
+			reportExactLine: %featureToggles.reportPreciseLineForUnusedFunctionParameter%
 
 	-
 		class: PHPStan\Rules\TooWideTypehints\TooWideParameterOutTypeCheck
@@ -1430,6 +1453,11 @@ services:
 
 	-
 		class: PHPStan\Type\Php\GetDebugTypeFunctionReturnTypeExtension
+		tags:
+			- phpstan.broker.dynamicFunctionReturnTypeExtension
+
+	-
+		class: PHPStan\Type\Php\GetDefinedVarsFunctionReturnTypeExtension
 		tags:
 			- phpstan.broker.dynamicFunctionReturnTypeExtension
 

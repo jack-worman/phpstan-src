@@ -284,6 +284,11 @@ final class PhpVersion
 		return $this->versionId >= 80000;
 	}
 
+	public function nonNumericStringAndIntegerIsFalseOnLooseComparison(): bool
+	{
+		return $this->versionId >= 80000;
+	}
+
 	public function supportsCallableInstanceMethods(): bool
 	{
 		return $this->versionId < 80000;
@@ -345,6 +350,16 @@ final class PhpVersion
 	{
 		// https://php.watch/versions/8.2/preg-n-no-capture-modifier
 		return $this->versionId >= 80200;
+	}
+
+	public function supportsPropertyHooks(): bool
+	{
+		return $this->versionId >= 80400;
+	}
+
+	public function supportsAsymmetricVisibility(): bool
+	{
+		return $this->versionId >= 80400;
 	}
 
 	public function hasDateTimeExceptions(): bool

@@ -23,6 +23,7 @@ use PHPStan\Type\TypeCombinator;
 use function count;
 use function in_array;
 use function is_int;
+use function preg_replace;
 use function rtrim;
 use function sscanf;
 use function str_contains;
@@ -33,6 +34,10 @@ use function trim;
 
 final class RegexGroupParser
 {
+
+	private const NOT_SUPPORTED_MODIFIERS = [
+		'J', // rare modifier too complicated to support
+	];
 
 	private static ?Parser $parser = null;
 
@@ -60,6 +65,18 @@ final class RegexGroupParser
 			return null;
 		}
 
+		$modifiers = $this->regexExpressionHelper->getPatternModifiers($regex) ?? '';
+		foreach (self::NOT_SUPPORTED_MODIFIERS as $notSupportedModifier) {
+			if (str_contains($modifiers, $notSupportedModifier)) {
+				return null;
+			}
+		}
+
+		if (str_contains($modifiers, 'x')) {
+			// in freespacing mode the # character starts a comment and runs until the end of the line
+			$regex = preg_replace('/(?<!\?)#.*/', '', $regex) ?? '';
+		}
+
 		$rawRegex = $this->regexExpressionHelper->removeDelimitersAndModifiers($regex);
 		try {
 			$ast = self::$parser->parse($rawRegex);
@@ -68,7 +85,6 @@ final class RegexGroupParser
 		}
 
 		$captureOnlyNamed = false;
-		$modifiers = $this->regexExpressionHelper->getPatternModifiers($regex) ?? '';
 		if ($this->phpVersion->supportsPregCaptureOnlyNamedGroups()) {
 			$captureOnlyNamed = str_contains($modifiers, 'n');
 		}
@@ -446,7 +462,30 @@ final class RegexGroupParser
 		}
 
 		if ($ast->getId() === '#alternation') {
-			$inAlternation = true;
+			$newLiterals = [];
+			foreach ($children as $child) {
+				$walkResult = $this->walkGroupAst(
+					$child,
+					true,
+					$inClass,
+					$patternModifiers,
+					$walkResult->onlyLiterals([]),
+				);
+
+				if ($newLiterals === null) {
+					continue;
+				}
+
+				if (count($walkResult->getOnlyLiterals() ?? []) > 0) {
+					foreach ($walkResult->getOnlyLiterals() as $alternationLiterals) {
+						$newLiterals[] = $alternationLiterals;
+					}
+				} else {
+					$newLiterals = null;
+				}
+			}
+
+			return $walkResult->onlyLiterals($newLiterals);
 		}
 
 		// [^0-9] should not parse as numeric-string, and [^list-everything-but-numbers] is technically
@@ -488,7 +527,7 @@ final class RegexGroupParser
 			if ($literal !== '' && $literal !== '0') {
 				$isNonFalsy = true;
 			}
-			return false;
+			return $literal === '';
 		}
 
 		foreach ($node->getChildren() as $child) {
@@ -535,13 +574,19 @@ final class RegexGroupParser
 			if (
 				$appendLiterals
 				&& $onlyLiterals !== null
-				&& (!in_array($value, ['.'], true) || $isEscaped || $inCharacterClass)
 			) {
-				if ($onlyLiterals === []) {
-					$onlyLiterals = [$value];
+				if (
+					in_array($value, ['.'], true)
+					&& !($isEscaped || $inCharacterClass)
+				) {
+					$onlyLiterals = null;
 				} else {
-					foreach ($onlyLiterals as &$literal) {
-						$literal .= $value;
+					if ($onlyLiterals === []) {
+						$onlyLiterals = [$value];
+					} else {
+						foreach ($onlyLiterals as &$literal) {
+							$literal .= $value;
+						}
 					}
 				}
 			}

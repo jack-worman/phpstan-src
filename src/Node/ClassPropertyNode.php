@@ -111,6 +111,11 @@ final class ClassPropertyNode extends NodeAbstract implements VirtualNode
 		return $this->isAllowedPrivateMutation;
 	}
 
+	public function isAbstract(): bool
+	{
+		return (bool) ($this->flags & Modifiers::ABSTRACT);
+	}
+
 	public function getNativeType(): ?Type
 	{
 		return $this->type;
@@ -140,6 +145,19 @@ final class ClassPropertyNode extends NodeAbstract implements VirtualNode
 	public function getSubNodeNames(): array
 	{
 		return [];
+	}
+
+	public function hasHooks(): bool
+	{
+		return $this->getHooks() !== [];
+	}
+
+	/**
+	 * @return Node\PropertyHook[]
+	 */
+	public function getHooks(): array
+	{
+		return $this->originalNode->hooks;
 	}
 
 }

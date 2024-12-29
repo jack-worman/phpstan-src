@@ -18,12 +18,22 @@ final class PhpVersions
 	{
 	}
 
+	public function getType(): Type
+	{
+		return $this->phpVersions;
+	}
+
 	public function supportsNoncapturingCatches(): TrinaryLogic
 	{
 		return IntegerRangeType::fromInterval(80000, null)->isSuperTypeOf($this->phpVersions)->result;
 	}
 
 	public function producesWarningForFinalPrivateMethods(): TrinaryLogic
+	{
+		return IntegerRangeType::fromInterval(80000, null)->isSuperTypeOf($this->phpVersions)->result;
+	}
+
+	public function supportsNamedArguments(): TrinaryLogic
 	{
 		return IntegerRangeType::fromInterval(80000, null)->isSuperTypeOf($this->phpVersions)->result;
 	}

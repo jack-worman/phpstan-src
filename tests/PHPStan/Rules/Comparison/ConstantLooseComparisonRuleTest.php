@@ -4,6 +4,7 @@ namespace PHPStan\Rules\Comparison;
 
 use PHPStan\Rules\Rule;
 use PHPStan\Testing\RuleTestCase;
+use function array_merge;
 use const PHP_VERSION_ID;
 
 /**
@@ -142,7 +143,7 @@ class ConstantLooseComparisonRuleTest extends RuleTestCase
 
 	public function testBug11694(): void
 	{
-		$this->analyse([__DIR__ . '/data/bug-11694.php'], [
+		$expectedErrors = [
 			[
 				'Loose comparison using == between 3 and int<10, 20> will always evaluate to false.',
 				17,
@@ -173,6 +174,22 @@ class ConstantLooseComparisonRuleTest extends RuleTestCase
 				27,
 				'Because the type is coming from a PHPDoc, you can turn off this check by setting <fg=cyan>treatPhpDocTypesAsCertain: false</> in your <fg=cyan>%configurationFile%</>.',
 			],
+		];
+
+		if (PHP_VERSION_ID >= 80000) {
+			$expectedErrors = array_merge($expectedErrors, [
+				[
+					"Loose comparison using == between '13foo' and int<10, 20> will always evaluate to false.",
+					29,
+				],
+				[
+					"Loose comparison using == between int<10, 20> and '13foo' will always evaluate to false.",
+					30,
+				],
+			]);
+		}
+
+		$expectedErrors = array_merge($expectedErrors, [
 			[
 				'Loose comparison using == between \' 3\' and int<10, 20> will always evaluate to false.',
 				32,
@@ -202,6 +219,19 @@ class ConstantLooseComparisonRuleTest extends RuleTestCase
 				'Loose comparison using == between int<10, 20> and false will always evaluate to false.',
 				45,
 				'Because the type is coming from a PHPDoc, you can turn off this check by setting <fg=cyan>treatPhpDocTypesAsCertain: false</> in your <fg=cyan>%configurationFile%</>.',
+			],
+		]);
+
+		$this->analyse([__DIR__ . '/data/bug-11694.php'], $expectedErrors);
+	}
+
+	public function testBug8800(): void
+	{
+		$this->treatPhpDocTypesAsCertain = true;
+		$this->analyse([__DIR__ . '/data/bug-8800.php'], [
+			[
+				'Loose comparison using == between 0|1|false and 2 will always evaluate to false.',
+				9,
 			],
 		]);
 	}

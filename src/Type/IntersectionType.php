@@ -716,7 +716,9 @@ class IntersectionType implements CompoundType
 
 	public function looseCompare(Type $type, PhpVersion $phpVersion): BooleanType
 	{
-		return new BooleanType();
+		return $this->intersectResults(
+			static fn (Type $innerType): TrinaryLogic => $innerType->looseCompare($type, $phpVersion)->toTrinaryLogic()
+		)->toBooleanType();
 	}
 
 	public function isOffsetAccessible(): TrinaryLogic
@@ -863,7 +865,7 @@ class IntersectionType implements CompoundType
 		foreach ($this->types as $type) {
 			$oneType = [];
 			foreach ($type->getEnumCases() as $enumCase) {
-				$oneType[md5($enumCase->describe(VerbosityLevel::typeOnly()))] = $enumCase;
+				$oneType[$enumCase->getClassName() . '::' . $enumCase->getEnumCaseName()] = $enumCase;
 			}
 			$compare[] = $oneType;
 		}

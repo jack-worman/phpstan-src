@@ -31,6 +31,7 @@ parametersSchema:
 		checkParameterCastableToNumberFunctions: bool(),
 		skipCheckGenericClasses: listOf(string()),
 		stricterFunctionMap: bool()
+		reportPreciseLineForUnusedFunctionParameter: bool()
 	])
 	fileExtensions: listOf(string())
 	checkAdvancedIsset: bool()
@@ -57,6 +58,7 @@ parametersSchema:
 	checkTooWideReturnTypesInProtectedAndPublicMethods: bool()
 	checkUninitializedProperties: bool()
 	checkDynamicProperties: bool()
+	strictRulesInstalled: bool()
 	deprecationRulesInstalled: bool()
 	inferPrivatePropertyTypeFromConstructor: bool()
 

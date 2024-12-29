@@ -2,7 +2,6 @@
 
 namespace PHPStan\Rules\Classes;
 
-use PHPStan\Php\PhpVersion;
 use PHPStan\Rules\AttributesCheck;
 use PHPStan\Rules\ClassCaseSensitivityCheck;
 use PHPStan\Rules\ClassForbiddenNameCheck;
@@ -35,7 +34,6 @@ class ClassAttributesRuleTest extends RuleTestCase
 				new FunctionCallParametersCheck(
 					new RuleLevelHelper($reflectionProvider, true, false, true, $this->checkExplicitMixed, $this->checkImplicitMixed, false),
 					new NullsafeCheck(),
-					new PhpVersion(80000),
 					new UnresolvableTypeHelper(),
 					new PropertyReflectionFinder(),
 					true,
@@ -163,6 +161,30 @@ class ClassAttributesRuleTest extends RuleTestCase
 			[
 				'Parameter #1 $name of attribute class Bug12011\Table constructor expects string|null, int given.',
 				23,
+			],
+		]);
+	}
+
+	public function testBug12281(): void
+	{
+		if (PHP_VERSION_ID < 80200) {
+			$this->markTestSkipped('Test requires PHP 8.2.');
+		}
+
+		$this->checkExplicitMixed = true;
+		$this->checkImplicitMixed = true;
+		$this->analyse([__DIR__ . '/data/bug-12281.php'], [
+			[
+				'Attribute class AllowDynamicProperties cannot be used with readonly class.',
+				05,
+			],
+			[
+				'Attribute class AllowDynamicProperties cannot be used with enum.',
+				12,
+			],
+			[
+				'Attribute class AllowDynamicProperties cannot be used with interface.',
+				15,
 			],
 		]);
 	}

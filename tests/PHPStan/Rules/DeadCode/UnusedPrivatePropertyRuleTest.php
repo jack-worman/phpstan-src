@@ -22,6 +22,8 @@ class UnusedPrivatePropertyRuleTest extends RuleTestCase
 	/** @var string[] */
 	private array $alwaysReadTags;
 
+	private bool $checkUninitializedProperties = false;
+
 	protected function getRule(): Rule
 	{
 		return new UnusedPrivatePropertyRule(
@@ -55,7 +57,7 @@ class UnusedPrivatePropertyRuleTest extends RuleTestCase
 			]),
 			$this->alwaysWrittenTags,
 			$this->alwaysReadTags,
-			true,
+			$this->checkUninitializedProperties,
 		);
 	}
 
@@ -63,6 +65,7 @@ class UnusedPrivatePropertyRuleTest extends RuleTestCase
 	{
 		$this->alwaysWrittenTags = [];
 		$this->alwaysReadTags = [];
+		$this->checkUninitializedProperties = true;
 
 		$tip = 'See: https://phpstan.org/developing-extensions/always-read-written-properties';
 
@@ -236,6 +239,7 @@ class UnusedPrivatePropertyRuleTest extends RuleTestCase
 	{
 		$this->alwaysWrittenTags = [];
 		$this->alwaysReadTags = [];
+		$this->checkUninitializedProperties = true;
 		$this->analyse([__DIR__ . '/data/bug-5337.php'], []);
 	}
 
@@ -338,6 +342,46 @@ class UnusedPrivatePropertyRuleTest extends RuleTestCase
 			[
 				'Property Bug11802\HelloWorld::$isFinal is never read, only written.',
 				8,
+				$tip,
+			],
+		]);
+	}
+
+	public function testPropertyHooks(): void
+	{
+		if (PHP_VERSION_ID < 80400) {
+			$this->markTestSkipped('Test requires PHP 8.4.');
+		}
+
+		$tip = 'See: https://phpstan.org/developing-extensions/always-read-written-properties';
+
+		$this->alwaysWrittenTags = [];
+		$this->alwaysReadTags = [];
+
+		$this->analyse([__DIR__ . '/data/property-hooks-unused-property.php'], [
+			[
+				'Property PropertyHooksUnusedProperty\FooUnused::$a is unused.',
+				32,
+				$tip,
+			],
+			[
+				'Property PropertyHooksUnusedProperty\FooOnlyRead::$a is never written, only read.',
+				46,
+				$tip,
+			],
+			[
+				'Property PropertyHooksUnusedProperty\FooOnlyWritten::$a is never read, only written.',
+				65,
+				$tip,
+			],
+			[
+				'Property PropertyHooksUnusedProperty\ReadInAnotherPropertyHook2::$bar is never written, only read.',
+				95,
+				$tip,
+			],
+			[
+				'Property PropertyHooksUnusedProperty\WrittenInAnotherPropertyHook::$bar is never read, only written.',
+				105,
 				$tip,
 			],
 		]);
